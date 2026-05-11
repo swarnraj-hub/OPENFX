@@ -1,3 +1,4 @@
-pyotp>=2.9.0
-undetected-chromedriver>=3.5.0
-selenium>=4.20.0
+selenium==4.24.0
+selenium-stealth
+webdriver-manager
+pyotp==2.9.0
