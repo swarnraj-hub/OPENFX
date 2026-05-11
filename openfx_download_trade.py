@@ -206,10 +206,13 @@ def build_driver():
     options = Options()
 
     options.add_argument("--window-size=1920,1080")
+    options.add_argument("--start-maximized")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--disable-features=VizDisplayCompositor")
+    options.add_argument("--disable-features=IsolateOrigins,site-per-process")
     options.add_argument("--disable-popup-blocking")
     options.add_argument("--lang=en-US")
     options.add_argument("--ignore-certificate-errors")
@@ -218,8 +221,8 @@ def build_driver():
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
 
-    if HEADLESS:
-        options.add_argument("--headless=new")
+    # No headless — xvfb provides the virtual display on CI.
+    # --headless=new causes Chrome renderer crashes on ubuntu-latest.
 
     options.add_experimental_option("prefs", {
         "download.prompt_for_download": False,
@@ -245,6 +248,10 @@ def build_driver():
         webgl_vendor="Intel Inc.",
         renderer="Intel Iris OpenGL Engine",
         fix_hairline=True,
+    )
+
+    driver.execute_script(
+        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
     )
 
     driver.implicitly_wait(10)

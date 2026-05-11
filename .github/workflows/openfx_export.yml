@@ -12,7 +12,7 @@ jobs:
       OPENFX_EMAIL:          ${{ secrets.OPENFX_EMAIL }}
       OPENFX_PASSWORD:       ${{ secrets.OPENFX_PASSWORD }}
       OPENFX_TOTP_SECRET:    ${{ secrets.OPENFX_TOTP_SECRET }}
-      OPENFX_HEADLESS:       "true"
+      OPENFX_HEADLESS:       "false"
       OPENFX_SESSION_FILE:   "openfx_session.pkl"
       OPENFX_SCREENSHOT_DIR: "screenshots"
       PYTHONUNBUFFERED:      "1"
