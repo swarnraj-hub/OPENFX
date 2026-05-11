@@ -346,7 +346,6 @@ def build_driver():
 
     driver = uc.Chrome(
         options=options,
-        version_main=147,
         use_subprocess=True
     )
 

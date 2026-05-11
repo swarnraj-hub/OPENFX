@@ -9,15 +9,13 @@ jobs:
     timeout-minutes: 45
 
     env:
-      OPENFX_EMAIL: ${{ secrets.OPENFX_EMAIL }}
-      OPENFX_PASSWORD: ${{ secrets.OPENFX_PASSWORD }}
-      OPENFX_TOTP_SECRET: ${{ secrets.OPENFX_TOTP_SECRET }}
-
-      OPENFX_HEADLESS: "true"
-      OPENFX_SESSION_FILE: "openfx_session.pkl"
+      OPENFX_EMAIL:         ${{ secrets.OPENFX_EMAIL }}
+      OPENFX_PASSWORD:      ${{ secrets.OPENFX_PASSWORD }}
+      OPENFX_TOTP_SECRET:   ${{ secrets.OPENFX_TOTP_SECRET }}
+      OPENFX_HEADLESS:      "true"
+      OPENFX_SESSION_FILE:  "openfx_session.pkl"
       OPENFX_SCREENSHOT_DIR: "screenshots"
-
-      PYTHONUNBUFFERED: "1"
+      PYTHONUNBUFFERED:     "1"
 
     steps:
       - name: Checkout Repository
@@ -28,15 +26,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Setup Chrome
-        uses: browser-actions/setup-chrome@v1
-        with:
-          chrome-version: 147
-
-      - name: Install XVFB
+      - name: Install Chrome and XVFB
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
+          sudo apt-get update -q
+          sudo apt-get install -y google-chrome-stable xvfb
+          google-chrome --version
 
       - name: Install Dependencies
         run: |
@@ -45,9 +39,6 @@ jobs:
             selenium==4.24.0 \
             undetected-chromedriver==3.5.5 \
             pyotp==2.9.0
-
-      - name: Verify Chrome
-        run: google-chrome --version
 
       - name: Verify UC
         run: python -c "import undetected_chromedriver as uc; print('UC OK')"
