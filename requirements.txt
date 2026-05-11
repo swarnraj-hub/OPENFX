@@ -1,5 +1,0 @@
-playwright>=1.44.0
-playwright-stealth>=2.0.0
-pyotp>=2.9.0
-undetected-chromedriver>=3.5.0
-selenium>=4.20.0
