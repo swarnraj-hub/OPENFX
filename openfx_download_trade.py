@@ -1,27 +1,5 @@
-```python
 """
 OpenFX — Trade History Export Automation
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-• Auto date range:
-    END_DATE   = today
-    START_DATE = today - 10 days
-
-• GitHub Actions compatible
-• Chrome 147 compatible
-• Cloudflare compatible
-• TOTP compatible
-• Session persistence
-• Screenshot logging
-• JSON output for n8n
-
-requirements.txt
-────────────────
-selenium==4.24.0
-undetected-chromedriver==3.5.5
-pyotp==2.9.0
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 import json
@@ -39,14 +17,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from selenium.common.exceptions import (
-    TimeoutException,
-    NoSuchElementException,
-)
+from selenium.common.exceptions import TimeoutException
 
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 # CONFIG
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 
 EMAIL = os.getenv("OPENFX_EMAIL", "")
 PASSWORD = os.getenv("OPENFX_PASSWORD", "")
@@ -85,31 +60,16 @@ TOTP_SECRET = (
 END_DATE = date.today()
 START_DATE = END_DATE - timedelta(days=10)
 
-MONTH_NAMES = {
-    1: "January",
-    2: "February",
-    3: "March",
-    4: "April",
-    5: "May",
-    6: "June",
-    7: "July",
-    8: "August",
-    9: "September",
-    10: "October",
-    11: "November",
-    12: "December",
-}
-
-
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 # HELPERS
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 
-def log(message):
-    print(message, file=sys.stderr)
+def log(msg):
+    print(msg, file=sys.stderr)
 
 
 def screenshot(driver, name):
+
     path = (
         f"{SCREENSHOT_DIR}/"
         f"{name}_{datetime.now().strftime('%H%M%S')}.png"
@@ -130,22 +90,22 @@ def get_totp():
 
     totp = pyotp.TOTP(TOTP_SECRET)
 
-    remaining = totp.interval - (int(time.time()) % totp.interval)
+    remaining = (
+        totp.interval
+        - (int(time.time()) % totp.interval)
+    )
 
     if remaining < 5:
-        log(f"[INFO] Waiting {remaining}s for new TOTP")
+        log(f"[INFO] Waiting {remaining}s for fresh TOTP")
         time.sleep(remaining + 1)
 
-    code = totp.now()
-
-    log("[INFO] Generated TOTP")
-
-    return code
+    return totp.now()
 
 
 def save_session(driver):
 
     try:
+
         cookies = driver.get_cookies()
 
         with open(SESSION_FILE, "wb") as f:
@@ -183,19 +143,22 @@ def load_session(driver):
         return True
 
     except Exception as e:
-        log(f"[WARN] Failed loading session: {e}")
+
+        log(f"[WARN] Session restore failed: {e}")
+
         return False
 
 
 def wait_cloudflare(driver, timeout=120):
 
-    log("[INFO] Waiting for Cloudflare verification")
+    log("[INFO] Waiting for Cloudflare")
 
     deadline = time.time() + timeout
 
     while time.time() < deadline:
 
         try:
+
             button = driver.find_element(
                 By.CSS_SELECTOR,
                 "[data-testid='sign-in-continue-button']"
@@ -216,6 +179,10 @@ def wait_cloudflare(driver, timeout=120):
 
     return False
 
+
+# ─────────────────────────────────────────────
+# LOGIN
+# ─────────────────────────────────────────────
 
 def login(driver):
 
@@ -244,9 +211,9 @@ def login(driver):
     password_input.send_keys(PASSWORD)
 
     if not wait_cloudflare(driver):
-        raise Exception("Cloudflare verification timeout")
+        raise Exception("Cloudflare timeout")
 
-    continue_btn = WebDriverWait(driver, 20).until(
+    continue_btn = WebDriverWait(driver, 30).until(
         EC.element_to_be_clickable(
             (
                 By.CSS_SELECTOR,
@@ -257,7 +224,7 @@ def login(driver):
 
     continue_btn.click()
 
-    log("[INFO] Submitted login")
+    log("[INFO] Login submitted")
 
     time.sleep(5)
 
@@ -265,7 +232,7 @@ def login(driver):
 
     otp_done = False
 
-    # 6 input boxes
+    # Multiple OTP boxes
     try:
 
         boxes = driver.find_elements(
@@ -283,7 +250,7 @@ def login(driver):
     except Exception:
         pass
 
-    # single input
+    # Single OTP field
     if not otp_done:
 
         selectors = [
@@ -313,7 +280,7 @@ def login(driver):
                 pass
 
     if not otp_done:
-        raise Exception("OTP input field not found")
+        raise Exception("OTP field not found")
 
     time.sleep(2)
 
@@ -336,9 +303,9 @@ def login(driver):
     log("[INFO] Login successful")
 
 
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 # DRIVER
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 
 def build_driver():
 
@@ -390,9 +357,9 @@ def build_driver():
     return driver
 
 
-# ─────────────────────────────────────────────────────────────
-# DATE PICKER
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# EXPORT FLOW
+# ─────────────────────────────────────────────
 
 def click_export_button(driver):
 
@@ -458,9 +425,9 @@ def click_custom_dates(driver):
     return False
 
 
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 # MAIN
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 
 def main():
 
@@ -510,10 +477,6 @@ def main():
             screenshot(driver, "01_trade_page")
         )
 
-        # ─────────────────────────────────────────────
-        # EXPORT BUTTON
-        # ─────────────────────────────────────────────
-
         log("[INFO] Searching export button")
 
         if not click_export_button(driver):
@@ -525,10 +488,6 @@ def main():
             screenshot(driver, "02_export_menu")
         )
 
-        # ─────────────────────────────────────────────
-        # CUSTOM DATE
-        # ─────────────────────────────────────────────
-
         log("[INFO] Searching custom dates")
 
         if not click_custom_dates(driver):
@@ -539,10 +498,6 @@ def main():
         result["screenshots"].append(
             screenshot(driver, "03_custom_dates")
         )
-
-        # ─────────────────────────────────────────────
-        # SUCCESS
-        # ─────────────────────────────────────────────
 
         result["success"] = True
 
@@ -584,4 +539,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
