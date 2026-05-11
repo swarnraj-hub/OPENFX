@@ -5,7 +5,9 @@ on:
 
 jobs:
   openfx-export:
+
     runs-on: self-hosted
+
     timeout-minutes: 45
 
     env:
@@ -16,11 +18,13 @@ jobs:
       OPENFX_HEADLESS: "false"
 
       OPENFX_SESSION_FILE: "openfx_session.pkl"
+
       OPENFX_SCREENSHOT_DIR: "screenshots"
 
       PYTHONUNBUFFERED: "1"
 
     steps:
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -30,30 +34,48 @@ jobs:
           python-version: "3.11"
 
       - name: Verify Python
+        shell: powershell
         run: |
           python --version
           pip --version
 
       - name: Install Dependencies
+        shell: powershell
         run: |
           python -m pip install --upgrade pip
 
           pip install selenium==4.24.0
           pip install selenium-stealth
-          pip install webdriver-manager
           pip install pyotp==2.9.0
 
       - name: Verify Chrome
+        shell: powershell
         run: |
-          powershell -Command "(Get-Item 'C:\Program Files\Google\Chrome\Application\chrome.exe').VersionInfo.ProductVersion"
+          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+
+          if (Test-Path $chrome) {
+              Write-Host "Chrome Found"
+              (Get-Item $chrome).VersionInfo.ProductVersion
+          }
+          else {
+              Write-Host "Chrome NOT Found"
+          }
+
+      - name: Kill Existing Chrome
+        shell: powershell
+        run: |
+          taskkill /F /IM chrome.exe 2>$null
+          taskkill /F /IM chromedriver.exe 2>$null
 
       - name: Create Screenshot Directory
+        shell: powershell
         run: |
           if (!(Test-Path screenshots)) {
             New-Item -ItemType Directory -Path screenshots
           }
 
       - name: Run OpenFX Export
+        shell: powershell
         run: |
           python openfx_download_trade.py
 
