@@ -258,11 +258,11 @@ def build_driver():
 
     options.add_argument("--disable-popup-blocking")
 
+    options.add_argument("--disable-notifications")
+
     options.add_argument("--disable-infobars")
 
     options.add_argument("--ignore-certificate-errors")
-
-    options.add_argument("--disable-notifications")
 
     options.add_argument("--disable-extensions")
 
@@ -276,30 +276,24 @@ def build_driver():
 
     options.add_argument("--lang=en-US")
 
-    options.add_argument(
-        f"--user-data-dir={Path.cwd() / 'chrome-profile'}"
-    )
+    options.add_argument("--remote-allow-origins=*")
 
-    options.add_experimental_option(
-        "excludeSwitches",
-        ["enable-automation"]
-    )
+    # IMPORTANT
+    # REMOVE persistent profile
+    # Chrome 147 crashes often with reused automation profiles
 
-    options.add_experimental_option(
-        "useAutomationExtension",
-        False
-    )
+    # options.add_argument(
+    #     f"--user-data-dir={Path.cwd() / 'chrome-profile'}"
+    # )
 
     if HEADLESS:
         options.add_argument("--headless=new")
 
     prefs = {
-        "download.default_directory": DOWNLOAD_DIR,
-        "download.prompt_for_download": False,
-        "download.directory_upgrade": True,
-        "profile.default_content_setting_values.notifications": 2,
         "credentials_enable_service": False,
         "profile.password_manager_enabled": False,
+        "download.prompt_for_download": False,
+        "profile.default_content_setting_values.notifications": 2,
     }
 
     options.add_experimental_option(
@@ -307,8 +301,22 @@ def build_driver():
         prefs
     )
 
+    options.add_experimental_option(
+        "excludeSwitches",
+        [
+            "enable-automation",
+            "enable-logging"
+        ]
+    )
+
+    options.add_experimental_option(
+        "useAutomationExtension",
+        False
+    )
+
     driver = webdriver.Chrome(options=options)
 
+    # STEALTH
     stealth(
         driver,
         languages=["en-US", "en"],
@@ -319,13 +327,22 @@ def build_driver():
         fix_hairline=True,
     )
 
+    # REMOVE webdriver fingerprint
     driver.execute_script("""
         Object.defineProperty(navigator, 'webdriver', {
             get: () => undefined
         })
+
+        Object.defineProperty(navigator, 'platform', {
+            get: () => 'Win32'
+        })
+
+        Object.defineProperty(navigator, 'vendor', {
+            get: () => 'Google Inc.'
+        })
     """)
 
-    driver.set_page_load_timeout(120)
+    driver.set_page_load_timeout(180)
 
     driver.implicitly_wait(10)
 
@@ -378,51 +395,283 @@ def login(driver):
 
     driver.get(f"{BASE_URL}/sign-in")
 
-    time.sleep(8)
+    # Allow Cloudflare + React hydration
+    time.sleep(15)
 
-    screenshot(driver, "login_page")
+    screenshot(driver, "01_login_page_loaded")
 
-    email_input = wait_for_element(
-        driver,
-        By.CSS_SELECTOR,
-        "input[type='email']"
-    )
+    # DEBUG INFO
+    try:
+        log(f"[DEBUG] Current URL: {driver.current_url}")
+        log(f"[DEBUG] Page Title: {driver.title}")
 
-    email_input.clear()
-    email_input.send_keys(EMAIL)
+        html_preview = driver.page_source[:5000]
 
-    password_input = wait_for_element(
-        driver,
-        By.CSS_SELECTOR,
-        "input[type='password']"
-    )
+        with open("debug_login_page.html", "w", encoding="utf-8") as f:
+            f.write(driver.page_source)
 
-    password_input.clear()
-    password_input.send_keys(PASSWORD)
+        log("[DEBUG] Saved debug_login_page.html")
 
-    screenshot(driver, "credentials_entered")
+    except Exception as e:
+        log(f"[WARN] Failed debug dump: {e}")
+
+    # -------------------------------------------------
+    # CHECK FOR CLOUDFLARE / ACCESS BLOCK
+    # -------------------------------------------------
+
+    lower_source = driver.page_source.lower()
+
+    blocked_keywords = [
+        "access denied",
+        "attention required",
+        "verify you are human",
+        "cloudflare",
+        "captcha",
+        "blocked",
+        "checking your browser",
+    ]
+
+    for keyword in blocked_keywords:
+
+        if keyword in lower_source:
+
+            screenshot(driver, "cloudflare_blocked")
+
+            raise Exception(
+                f"Blocked by Cloudflare / Bot Protection ({keyword})"
+            )
+
+    # -------------------------------------------------
+    # FIND EMAIL INPUT
+    # -------------------------------------------------
+
+    email_selectors = [
+        "input[type='email']",
+        "input[name='email']",
+        "input[placeholder*='email' i]",
+        "input[id*='email' i]",
+    ]
+
+    email_input = None
+
+    for selector in email_selectors:
+
+        try:
+
+            email_input = WebDriverWait(driver, 15).until(
+                EC.visibility_of_element_located(
+                    (By.CSS_SELECTOR, selector)
+                )
+            )
+
+            log(f"[INFO] Email field found: {selector}")
+
+            break
+
+        except Exception:
+            pass
+
+    if not email_input:
+
+        screenshot(driver, "email_field_not_found")
+
+        raise Exception(
+            "Email input not found after page load"
+        )
+
+    # -------------------------------------------------
+    # ENTER EMAIL
+    # -------------------------------------------------
+
+    try:
+
+        email_input.clear()
+
+        time.sleep(1)
+
+        email_input.send_keys(EMAIL)
+
+        log("[INFO] Email entered")
+
+    except Exception as e:
+
+        screenshot(driver, "email_entry_failed")
+
+        raise Exception(f"Failed entering email: {e}")
+
+    # -------------------------------------------------
+    # FIND PASSWORD FIELD
+    # -------------------------------------------------
+
+    password_selectors = [
+        "input[type='password']",
+        "input[name='password']",
+        "input[placeholder*='password' i]",
+        "input[id*='password' i]",
+    ]
+
+    password_input = None
+
+    for selector in password_selectors:
+
+        try:
+
+            password_input = WebDriverWait(driver, 15).until(
+                EC.visibility_of_element_located(
+                    (By.CSS_SELECTOR, selector)
+                )
+            )
+
+            log(f"[INFO] Password field found: {selector}")
+
+            break
+
+        except Exception:
+            pass
+
+    if not password_input:
+
+        screenshot(driver, "password_field_not_found")
+
+        raise Exception(
+            "Password input not found"
+        )
+
+    # -------------------------------------------------
+    # ENTER PASSWORD
+    # -------------------------------------------------
+
+    try:
+
+        password_input.clear()
+
+        time.sleep(1)
+
+        password_input.send_keys(PASSWORD)
+
+        log("[INFO] Password entered")
+
+    except Exception as e:
+
+        screenshot(driver, "password_entry_failed")
+
+        raise Exception(f"Failed entering password: {e}")
+
+    screenshot(driver, "02_credentials_entered")
+
+    # -------------------------------------------------
+    # WAIT FOR CLOUDFLARE
+    # -------------------------------------------------
 
     if not wait_cloudflare(driver):
-        raise Exception("Cloudflare timeout")
 
-    continue_btn = wait_for_element(
-        driver,
-        By.CSS_SELECTOR,
+        screenshot(driver, "cloudflare_timeout")
+
+        raise Exception(
+            "Cloudflare verification timeout"
+        )
+
+    # -------------------------------------------------
+    # CONTINUE BUTTON
+    # -------------------------------------------------
+
+    continue_selectors = [
         "[data-testid='sign-in-continue-button']",
-        clickable=True
-    )
+        "button[type='submit']",
+        "button",
+    ]
 
-    safe_click(driver, continue_btn)
+    continue_btn = None
 
-    log("[INFO] Login submitted")
+    for selector in continue_selectors:
 
-    time.sleep(8)
+        try:
+
+            buttons = driver.find_elements(
+                By.CSS_SELECTOR,
+                selector
+            )
+
+            for btn in buttons:
+
+                try:
+
+                    text = btn.text.lower()
+
+                    if (
+                        "continue" in text
+                        or "sign in" in text
+                        or "login" in text
+                    ):
+
+                        continue_btn = btn
+
+                        break
+
+                except Exception:
+                    pass
+
+            if continue_btn:
+                break
+
+        except Exception:
+            pass
+
+    if not continue_btn:
+
+        screenshot(driver, "continue_button_missing")
+
+        raise Exception(
+            "Continue button not found"
+        )
+
+    # -------------------------------------------------
+    # CLICK CONTINUE
+    # -------------------------------------------------
+
+    try:
+
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block:'center'})",
+            continue_btn
+        )
+
+        time.sleep(1)
+
+        safe_click(driver, continue_btn)
+
+        log("[INFO] Login submitted")
+
+    except Exception as e:
+
+        screenshot(driver, "continue_click_failed")
+
+        raise Exception(
+            f"Failed clicking continue: {e}"
+        )
+
+    # -------------------------------------------------
+    # WAIT AFTER LOGIN
+    # -------------------------------------------------
+
+    time.sleep(10)
+
+    screenshot(driver, "03_after_login_submit")
+
+    # -------------------------------------------------
+    # GENERATE OTP
+    # -------------------------------------------------
 
     code = get_totp()
 
+    log(f"[INFO] OTP Generated")
+
     otp_done = False
 
-    # Multiple OTP boxes
+    # -------------------------------------------------
+    # MULTI OTP BOX
+    # -------------------------------------------------
+
     try:
 
         boxes = driver.find_elements(
@@ -433,38 +682,54 @@ def login(driver):
         if len(boxes) >= 6:
 
             for i, digit in enumerate(code[:6]):
+
+                boxes[i].clear()
+
                 boxes[i].send_keys(digit)
 
+                time.sleep(0.2)
+
             otp_done = True
+
+            log("[INFO] OTP entered using multi-box")
 
     except Exception:
         pass
 
-    # Single OTP field
+    # -------------------------------------------------
+    # SINGLE OTP INPUT
+    # -------------------------------------------------
+
     if not otp_done:
 
-        selectors = [
+        otp_selectors = [
             "input[maxlength='6']",
             "input[name*='otp']",
+            "input[name*='code']",
             "input[placeholder*='code' i]",
+            "input[placeholder*='otp' i]",
             "input[autocomplete='one-time-code']",
         ]
 
-        for selector in selectors:
+        for selector in otp_selectors:
 
             try:
 
-                otp_input = wait_for_element(
-                    driver,
-                    By.CSS_SELECTOR,
-                    selector,
-                    timeout=5
+                otp_input = WebDriverWait(driver, 5).until(
+                    EC.visibility_of_element_located(
+                        (By.CSS_SELECTOR, selector)
+                    )
                 )
 
                 otp_input.clear()
+
                 otp_input.send_keys(code)
 
                 otp_done = True
+
+                log(
+                    f"[INFO] OTP entered using selector: {selector}"
+                )
 
                 break
 
@@ -472,25 +737,74 @@ def login(driver):
                 pass
 
     if not otp_done:
-        raise Exception("OTP input not found")
 
-    screenshot(driver, "otp_entered")
+        screenshot(driver, "otp_not_found")
+
+        raise Exception(
+            "OTP input field not found"
+        )
+
+    screenshot(driver, "04_otp_entered")
+
+    # -------------------------------------------------
+    # SUBMIT OTP
+    # -------------------------------------------------
 
     try:
 
-        submit_btn = driver.find_element(
+        submit_buttons = driver.find_elements(
             By.CSS_SELECTOR,
-            "button[type='submit']"
+            "button"
         )
 
-        safe_click(driver, submit_btn)
+        for btn in submit_buttons:
+
+            try:
+
+                text = btn.text.lower()
+
+                if (
+                    "verify" in text
+                    or "submit" in text
+                    or "continue" in text
+                ):
+
+                    safe_click(driver, btn)
+
+                    log("[INFO] OTP submitted")
+
+                    break
+
+            except Exception:
+                pass
 
     except Exception:
         pass
 
-    time.sleep(10)
+    # -------------------------------------------------
+    # WAIT FOR LOGIN COMPLETE
+    # -------------------------------------------------
 
-    screenshot(driver, "after_login")
+    time.sleep(15)
+
+    screenshot(driver, "05_after_otp_submit")
+
+    current_url = driver.current_url.lower()
+
+    if (
+        "login" in current_url
+        or "sign-in" in current_url
+    ):
+
+        screenshot(driver, "login_failed")
+
+        raise Exception(
+            "Login failed after OTP submit"
+        )
+
+    # -------------------------------------------------
+    # SAVE SESSION
+    # -------------------------------------------------
 
     save_session(driver)
 
