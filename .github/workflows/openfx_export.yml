@@ -20,50 +20,50 @@ jobs:
       PYTHONUNBUFFERED: "1"
 
     steps:
-      # ------------------------------------------------
+
+      # ----------------------------------------
       # Checkout Repository
-      # ------------------------------------------------
+      # ----------------------------------------
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ------------------------------------------------
+      # ----------------------------------------
       # Setup Python
-      # ------------------------------------------------
+      # ----------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # ------------------------------------------------
+      # ----------------------------------------
       # Verify Python
-      # ------------------------------------------------
+      # ----------------------------------------
       - name: Verify Python
         shell: powershell
         run: |
           python --version
           pip --version
 
-      # ------------------------------------------------
+      # ----------------------------------------
       # Install Dependencies
-      # ------------------------------------------------
+      # ----------------------------------------
       - name: Install Dependencies
         shell: powershell
         run: |
           python -m pip install --upgrade pip
 
-          pip install ^
-            selenium==4.24.0 ^
-            selenium-stealth ^
-            webdriver-manager ^
-            pyotp==2.9.0
+          pip install selenium==4.24.0
+          pip install selenium-stealth
+          pip install webdriver-manager
+          pip install pyotp==2.9.0
 
           if (Test-Path "requirements.txt") {
             pip install -r requirements.txt
           }
 
-      # ------------------------------------------------
+      # ----------------------------------------
       # Verify Chrome
-      # ------------------------------------------------
+      # ----------------------------------------
       - name: Verify Chrome
         shell: powershell
         run: |
@@ -81,34 +81,34 @@ jobs:
             exit 1
           }
 
-      # ------------------------------------------------
-      # Kill Old Chrome Processes
-      # ------------------------------------------------
+      # ----------------------------------------
+      # Kill Existing Chrome Processes
+      # ----------------------------------------
       - name: Kill Old Chrome Processes
         shell: powershell
         run: |
           Get-Process chrome -ErrorAction SilentlyContinue | Stop-Process -Force
           Get-Process chromedriver -ErrorAction SilentlyContinue | Stop-Process -Force
 
-      # ------------------------------------------------
+      # ----------------------------------------
       # Create Screenshot Directory
-      # ------------------------------------------------
+      # ----------------------------------------
       - name: Create Screenshot Directory
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path screenshots
 
-      # ------------------------------------------------
-      # Run Automation
-      # ------------------------------------------------
+      # ----------------------------------------
+      # Run OpenFX Automation
+      # ----------------------------------------
       - name: Run OpenFX Export
         shell: powershell
         run: |
           python openfx_download_trade.py
 
-      # ------------------------------------------------
+      # ----------------------------------------
       # Upload Screenshots
-      # ------------------------------------------------
+      # ----------------------------------------
       - name: Upload Screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -117,9 +117,9 @@ jobs:
           path: screenshots/
           retention-days: 7
 
-      # ------------------------------------------------
+      # ----------------------------------------
       # Upload Session File
-      # ------------------------------------------------
+      # ----------------------------------------
       - name: Upload Session File
         if: always()
         uses: actions/upload-artifact@v4
